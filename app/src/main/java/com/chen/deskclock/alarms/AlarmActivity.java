@@ -71,6 +71,9 @@ import com.chen.deskclock.provider.AlarmInstance;
 import com.chen.deskclock.widget.CircleView;
 
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_GENERIC;
 
@@ -162,12 +165,12 @@ public class AlarmActivity extends BaseActivity
     private TextView motionsTextView;
     private SensorManager sensorManager;
     private Sensor accelerometerSensor;
-    private boolean isAccelerometerAviable=false,isNotFirstItteration=false;
+    private boolean isAccelerometerAviable=false,isNotFirstItteration=false, isDelayGood=true;
     private float CurrentX,CurrentY,CurrentZ,lastX,lastY,lastZ;
-    private float xDiff,yDiff,zDiff,shakeThreshold=32f;
+    private float xDiff,yDiff,zDiff,shakeThreshold=30f;
     private int succesfullMotions=0,amountOfMotionsNeed=250;
     private Vibrator vibrator;
-
+    ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
 
 
     private ValueAnimator mAlarmAnimator;
@@ -728,12 +731,11 @@ public class AlarmActivity extends BaseActivity
             yDiff=Math.abs(lastY-CurrentY);
             zDiff=Math.abs(lastZ-CurrentZ);
 
-            if (xDiff>shakeThreshold && yDiff>shakeThreshold){
+            if (((xDiff>shakeThreshold) && (yDiff>shakeThreshold))||((xDiff>shakeThreshold) && (zDiff>shakeThreshold))||((yDiff>shakeThreshold) && (zDiff>shakeThreshold))){
                 succesfullMotionRegister();
-            }else if (xDiff>shakeThreshold && zDiff>shakeThreshold){
-                succesfullMotionRegister();
-            }else if (yDiff>shakeThreshold && zDiff>shakeThreshold){
-                succesfullMotionRegister();
+                if (!isDelayGood){
+                    executorService.schedule(this::Delay,450, TimeUnit.MILLISECONDS);
+                }
             }
 
         }
@@ -745,16 +747,23 @@ public class AlarmActivity extends BaseActivity
 
     private void succesfullMotionRegister(){
         //vibrate, register succesfull motion, and dismiss alarm if there is enough of motions
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createOneShot(80,VibrationEffect.DEFAULT_AMPLITUDE));
-        }else{
-            vibrator.vibrate(80);
+        if (isDelayGood) {
+            isDelayGood = false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE));
+            } else {
+                vibrator.vibrate(80);
+            }
+            motionsTextView.setText(Integer.toString(amountOfMotionsNeed - succesfullMotions));
+            succesfullMotions++;
+            if (succesfullMotions >= amountOfMotionsNeed) {
+                dismiss();
+            }
         }
-        motionsTextView.setText(Integer.toString(amountOfMotionsNeed-succesfullMotions));
-        succesfullMotions++;
-        if (succesfullMotions>=amountOfMotionsNeed){
-            dismiss();
-        }
+    }
+
+    public void Delay(){
+        isDelayGood = true;
     }
 
     @Override
